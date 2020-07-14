@@ -10,19 +10,6 @@ import matplotlib.pyplot as plt
 import zivid
 
 
-@dataclass(frozen=True)
-class StopIncrement:
-    """
-    Set of aperture stop increments. For readability.
-
-    """
-
-    full = 1 / 1
-    half = 1 / 2
-    third = 1 / 3
-    quarter = 1 / 4
-
-
 @dataclass
 class MeanColor:
     """
@@ -40,19 +27,19 @@ class MeanColor:
     blue: np.array
 
 
-def _get_next_aperture_setting(current_aperture: float, stop: float) -> float:
+def _get_next_aperture_setting(current_aperture: float, stop_increment: float) -> float:
     """Get next aperture setting.
 
     Args:
-        curent_aperture: Current aperture
-        stop: Exposure stops to move
+        current_aperture: Current aperture
+        stop_increment: Exposure stops to move (typically 1/4, 1/2 or 1/1)
 
     Returns:
-        new_aperture: New aperture
+        New aperture
 
     """
-    # new_aperture = current_aperture * 2 ^ (0.5 * stop)
-    return current_aperture * math.pow(2, 0.5 * stop)
+    # new_aperture = current_aperture * 2 ^ (0.5 * stop_increment)
+    return current_aperture * math.pow(2, 0.5 * stop_increment)
 
 
 def _frame2d_to_rgb(frame: zivid.Frame2D):
@@ -149,7 +136,7 @@ def _get_tuned_settings(camera: zivid.Camera) -> zivid.Settings2D:
     print(f"RGB mean: {mean_rgb}, Aperture: {settings_2d.acquisitions[0].aperture}")
     while mean_rgb.max() > 240:
         settings_2d.acquisitions[0].aperture = _get_next_aperture_setting(
-            settings_2d.acquisitions[0].aperture, StopIncrement.quarter
+            settings_2d.acquisitions[0].aperture, stop_increment=0.25
         )
         rgb = _frame2d_to_rgb(camera.capture(settings_2d))
         rgb_masked = _get_center_mask(rgb, 100)
