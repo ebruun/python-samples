@@ -133,15 +133,38 @@ def _get_tuned_settings(camera: zivid.Camera) -> zivid.Settings2D:
     rgb = _frame2d_to_rgb(camera.capture(settings_2d))
     rgb_masked = _get_center_mask(rgb, 100)
     mean_rgb = np.mean(np.mean(rgb_masked, axis=0), axis=0)
-    print(f"RGB mean: {mean_rgb}, Aperture: {settings_2d.acquisitions[0].aperture}")
+    print(f"Min exposure: {zivid.Settings2D.Acquisition.exposure_time}")
+    print(
+        f"RGB mean: {mean_rgb}, Aperture: {settings_2d.acquisitions[0].aperture:.2f}, Exposure Time: {settings_2d.acquisitions[0].exposure_time.microseconds/1000:.2f}ms, Gain: {settings_2d.acquisitions[0].gain}"
+    )
     while mean_rgb.max() > 240:
-        settings_2d.acquisitions[0].aperture = _get_next_aperture_setting(
-            settings_2d.acquisitions[0].aperture, stop_increment=0.25
-        )
+        if settings_2d.acquisitions[0].gain > 1:
+            settings_2d.acquisitions[0].gain = settings_2d.acquisitions[0].gain / 2
+            settings_2d.acquisitions[0].gain = max(settings_2d.acquisitions[0].gain, 1)
+        # Cap at Iris 14 --> f-number 10.89
+        elif settings_2d.acquisitions[0].aperture < 11:
+            settings_2d.acquisitions[0].aperture = _get_next_aperture_setting(
+                settings_2d.acquisitions[0].aperture, stop_increment=0.5
+            )
+        elif settings_2d.acquisitions[0].exposure_time.microseconds > 10000:
+            settings_2d.acquisitions[0].exposure_time = datetime.timedelta(
+                microseconds=(
+                    settings_2d.acquisitions[0].exposure_time.microseconds - 10000
+                )
+            )
+            if settings_2d.acquisitions[0].exposure_time.microseconds < 10000:
+                settings_2d.acquisitions[
+                    0
+                ].exposure_time.microseconds = datetime.timedelta(microseconds=10000)
+        else:
+            print("Can't reduce exposure anymore")
+
         rgb = _frame2d_to_rgb(camera.capture(settings_2d))
         rgb_masked = _get_center_mask(rgb, 100)
         mean_rgb = np.mean(np.mean(rgb_masked, axis=0), axis=0)
-        print(f"RGB mean: {mean_rgb}, Aperture: {settings_2d.acquisitions[0].aperture}")
+        print(
+            f"RGB mean: {mean_rgb}, Aperture: {settings_2d.acquisitions[0].aperture:.2f}, Exposure Time: {settings_2d.acquisitions[0].exposure_time.microseconds/1000:.2f}ms, Gain: {settings_2d.acquisitions[0].gain}"
+        )
     return settings_2d
 
 
@@ -166,9 +189,6 @@ def _color_balance_calibration(camera, settings_2d):
         settings_2d.processing.color.balance.red = corrected_red_balance
         settings_2d.processing.color.balance.blue = corrected_blue_balance
         rgb = _frame2d_to_rgb(camera.capture(settings_2d))
-        if first_iteration:
-            _display_rgb(rgb, "RGB image before color balance")
-            first_iteration = False
         mean_color = _compute_mean_rgb(_get_center_mask(rgb, 100))
         print(
             (
@@ -192,7 +212,6 @@ def _color_balance_calibration(camera, settings_2d):
             * mean_color.green
             / mean_color.blue
         )
-    _display_rgb(rgb, "RGB image after color balance")
 
     return (corrected_red_balance, corrected_blue_balance)
 
